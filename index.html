@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DEAD HAND">
 
-<title>DEAD HAND V5.4</title>
+<title>DEAD HAND V5.6</title>
 
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -155,6 +155,13 @@ input:focus, textarea:focus, select:focus { border-color: #ff2222; }
 .found-box .found-meta { font-size: 10px; color: #888; line-height: 1.6; }
 .found-box .found-status-online { color: #22c55e; font-weight: bold; }
 .found-box .found-status-offline { color: #888; }
+
+/* Notification banner */
+.notif-banner {
+    background: #1a1200; border: 1px solid #d4a017; color: #ffcc66;
+    border-radius: 12px; padding: 12px; margin: 10px 0; font-size: 11px; line-height: 1.5;
+}
+.notif-banner button { margin-top: 8px; }
 </style>
 </head>
 
@@ -199,7 +206,7 @@ input:focus, textarea:focus, select:focus { border-color: #ff2222; }
     </div>
 </div>
 
-<!-- CODE SCREEN (after signup) -->
+<!-- CODE SCREEN -->
 <div id="codeScreen" class="hidden">
     <div class="card" style="border-color:#22c55e">
         <h3 style="margin:0;color:#22c55e;text-align:center;">YOUR UNIQUE CODE</h3>
@@ -223,6 +230,11 @@ input:focus, textarea:focus, select:focus { border-color: #ff2222; }
     <div class="card" style="text-align:center;padding:24px">
         <div style="font-size:48px">☠️</div>
         <div id="homeGreeting" style="color:#888;font-size:12px;margin:10px 0">Choose a mode.</div>
+
+        <div id="notifBanner" class="notif-banner hidden">
+            <div>🔔 Enable notifications so you get alerts when someone you follow triggers an SOS.</div>
+            <button class="btn btn-gold" onclick="enableNotifications()">ENABLE NOTIFICATIONS</button>
+        </div>
 
         <button class="btn btn-red homeBtn" id="btnSafety" data-mode="safety">
             🛡️ SAFETY MODE<br>
@@ -471,6 +483,15 @@ firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 const auth = firebase.auth();
 
+let messaging = null;
+try {
+    if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()) {
+        messaging = firebase.messaging();
+    }
+} catch (e) {
+    console.warn("FCM not supported:", e.message);
+}
+
 function getDeviceId() {
     let deviceId = localStorage.getItem("dh_device_id");
     if (!deviceId) {
@@ -481,14 +502,13 @@ function getDeviceId() {
 }
 const DEVICE_ID = getDeviceId();
 
-const BACKEND = "firebase";
-
 // ============================================
 // GLOBAL STATE
 // ============================================
 let currentUser = null;
 let currentUserCode = null;
 let currentUserName = "";
+let currentFcmToken = null;
 
 let deadline = 0;
 let interval = null;
@@ -511,6 +531,78 @@ let markerSafety = null, markerArmed = null, markerFind = null;
 let groupMarkers = {};
 
 function $(id) { return document.getElementById(id); }
+
+// ============================================
+// NOTIFICATION PERMISSION + FCM TOKEN
+// ============================================
+function notifSupported() {
+    return ("Notification" in window) && messaging;
+}
+
+function updateNotifBanner() {
+    const banner = $("notifBanner");
+    if (!banner) return;
+    if (!notifSupported()) { banner.classList.add("hidden"); return; }
+    if (Notification.permission === "granted" && currentFcmToken) {
+        banner.classList.add("hidden");
+    } else {
+        banner.classList.remove("hidden");
+    }
+}
+
+async function enableNotifications() {
+    if (!notifSupported()) { alert("Notifications are not supported on this browser."); return; }
+    try {
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") { alert("Notifications blocked. Enable them in browser settings."); return; }
+        await registerFcmToken();
+    } catch (e) {
+        alert("Error: " + e.message);
+    }
+}
+
+async function registerFcmToken() {
+    if (!messaging || !currentUser) return;
+    try {
+        // Register the FCM service worker (separate file)
+        const registration = await navigator.serviceWorker.register("firebase-messaging-sw.js", { scope: "./" });
+        console.log("FCM SW registered:", registration.scope);
+
+        const token = await messaging.getToken({
+            vapidKey: FCM_VAPID_KEY,
+            serviceWorkerRegistration: registration
+        });
+
+        if (!token) { console.warn("FCM getToken returned empty"); return; }
+
+        currentFcmToken = token;
+        await database.ref("users/" + currentUser.uid + "/profile/fcmToken").set(token);
+        console.log("FCM token saved:", token.substring(0, 20) + "...");
+        updateNotifBanner();
+    } catch (e) {
+        console.warn("FCM register error:", e.message);
+    }
+}
+
+// Foreground message handling (when app is visible)
+if (messaging) {
+    messaging.onMessage((payload) => {
+        console.log("FCM foreground message:", payload);
+        const title = (payload.notification && payload.notification.title) || "DEAD HAND ALERT";
+        const body = (payload.notification && payload.notification.body) ||
+                     (payload.data && payload.data.message) || "Alert triggered";
+        const mapLink = (payload.data && payload.data.mapLink) || "";
+        if (Notification.permission === "granted") {
+            new Notification(title, { body, icon: "icon-192.png" });
+        }
+        // Show inline banner too
+        const host = $("notifBanner");
+        if (host) {
+            host.classList.remove("hidden");
+            host.innerHTML = "⚠️ " + body + (mapLink ? ' <a href="' + mapLink + '" target="_blank">Open map</a>' : '');
+        }
+    });
+}
 
 // ============================================
 // SIGN-UP
@@ -552,11 +644,8 @@ async function handleSignUp() {
         const uid = cred.user.uid;
 
         const code = await getUniqueCode();
-
-        // Reserve the code → uid mapping
         await database.ref("codes/" + code).set(uid);
 
-        // Save the profile WITH the code (single atomic write)
         await database.ref("users/" + uid + "/profile").set({
             uid, email,
             name: name || "User",
@@ -586,21 +675,16 @@ async function handleSignIn() {
 
     try {
         await auth.signInWithEmailAndPassword(email, password);
-        // onAuthStateChanged will route the user
     } catch (err) {
         showAuthMsg("Sign-in failed: " + (err.message || err.code), "error");
     }
 }
 
 function copyMyCode() {
-    if (!currentUserCode) {
-        alert("Code not loaded yet. Open Profile in a moment.");
-        return;
-    }
+    if (!currentUserCode) { alert("Code not loaded yet."); return; }
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(currentUserCode).then(() => {
-            alert("Code copied: " + currentUserCode);
-        }).catch(() => alert("Your code: " + currentUserCode));
+        navigator.clipboard.writeText(currentUserCode).then(() => alert("Code copied: " + currentUserCode))
+            .catch(() => alert("Your code: " + currentUserCode));
     } else {
         alert("Your code: " + currentUserCode);
     }
@@ -639,24 +723,20 @@ auth.onAuthStateChanged(async (user) => {
     if (user) {
         currentUser = user;
 
-        // Load profile
         const snap = await database.ref("users/" + user.uid + "/profile").once("value");
         let profile = snap.val() || {};
 
-        // SELF-HEAL: if profile is missing code, try to find it from codes/
         if (!profile.code) {
             const allCodesSnap = await database.ref("codes").once("value");
             const allCodes = allCodesSnap.val() || {};
             for (const c of Object.keys(allCodes)) {
                 if (allCodes[c] === user.uid) { profile.code = c; break; }
             }
-            // If we still don't have a code, generate one now
             if (!profile.code) {
                 const newCode = await getUniqueCode();
                 await database.ref("codes/" + newCode).set(user.uid);
                 profile.code = newCode;
             }
-            // Save back to profile
             await database.ref("users/" + user.uid + "/profile").update({
                 code: profile.code,
                 email: profile.email || user.email || "",
@@ -666,7 +746,6 @@ auth.onAuthStateChanged(async (user) => {
                 updatedAt: Date.now()
             });
         } else {
-            // Normal update
             database.ref("users/" + user.uid + "/profile").update({
                 deviceId: DEVICE_ID,
                 lastActive: Date.now()
@@ -675,6 +754,7 @@ auth.onAuthStateChanged(async (user) => {
 
         currentUserCode = profile.code;
         currentUserName = profile.name || "User";
+        currentFcmToken = profile.fcmToken || null;
 
         const pEmail = $("profileEmail"); if (pEmail) pEmail.value = profile.email || user.email || "";
         const pName  = $("profileName");  if (pName)  pName.value  = profile.name  || "";
@@ -684,6 +764,13 @@ auth.onAuthStateChanged(async (user) => {
 
         updateHomeGreeting();
         openScreen("home");
+        startUserHeartbeat();
+
+        // If permission already granted, silently refresh the token
+        if (notifSupported() && Notification.permission === "granted") {
+            registerFcmToken();
+        }
+        updateNotifBanner();
     } else {
         currentUser = null; currentUserCode = null; currentUserName = "";
         openScreen("auth");
@@ -714,7 +801,7 @@ async function lookupCode() {
         const profile = profSnap.val() || {};
         const loc = profile.lastLocation || null;
         const now = Date.now();
-        const online = profile.lastActive && (now - profile.lastActive < 120000);
+        const online = profile.lastActive && (now - profile.lastActive < 180000);
 
         if (!loc || loc.lat == null) {
             resultEl.innerHTML =
@@ -974,7 +1061,7 @@ function firebaseSendFarAlert({ targetDeviceId, distance, myLat, myLon, myName }
 }
 
 // ============================================
-// SAVE MY LOCATION
+// SAVE LOCATION
 // ============================================
 function saveMyLocationToFirebase() {
     if (!currentUser) return;
@@ -986,7 +1073,38 @@ function saveMyLocationToFirebase() {
 }
 
 // ============================================
-// LONG-PRESS (dev key removed, but kept for safety mode long-press = no-op)
+// HEARTBEAT
+// ============================================
+let userHeartbeatTimer = null;
+let userGpsWatch = null;
+
+function startUserHeartbeat() {
+    if (userHeartbeatTimer) clearInterval(userHeartbeatTimer);
+    userHeartbeatTimer = setInterval(() => {
+        if (!currentUser) return;
+        database.ref("users/" + currentUser.uid + "/profile/lastActive").set(Date.now()).catch(() => {});
+    }, 30000);
+
+    if (currentUser) {
+        database.ref("users/" + currentUser.uid + "/profile/lastActive").set(Date.now()).catch(() => {});
+    }
+
+    if (!navigator.geolocation) return;
+    if (userGpsWatch !== null) { navigator.geolocation.clearWatch(userGpsWatch); userGpsWatch = null; }
+    userGpsWatch = navigator.geolocation.watchPosition(
+        (pos) => {
+            lastLatitude = pos.coords.latitude;
+            lastLongitude = pos.coords.longitude;
+            lastAccuracy = pos.coords.accuracy || 0;
+            saveMyLocationToFirebase();
+        },
+        (err) => console.warn("Heartbeat GPS err:", err.message),
+        { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 }
+    );
+}
+
+// ============================================
+// TAP HANDLERS
 // ============================================
 function handleModeTap(mode) {
     if (mode === "safety") openScreen("safety");
@@ -1065,6 +1183,7 @@ function openScreen(name) {
     }, 200);
 
     checkBanner();
+    updateNotifBanner();
 }
 
 // ============================================
@@ -1321,7 +1440,7 @@ function escapeHtml(v) {
 }
 
 // ============================================
-// SERVICE WORKER
+// SERVICE WORKER (PWA cache)
 // ============================================
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch((e) => console.warn("SW reg fail", e));
@@ -1334,6 +1453,7 @@ window.addEventListener("load", function() {
     const btn = $("btnSafety");
     if (btn) btn.addEventListener("click", () => handleModeTap("safety"));
     checkBanner();
+    updateNotifBanner();
 });
 
 </script>
