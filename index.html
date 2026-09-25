@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DEAD HAND">
+
+<title>DEAD HAND V5.3</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+
+<!-- Leaflet (live map) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
+
+<!-- 🔐 SECRETS — this file is gitignored, upload it manually to hosting -->
+<script src="secrets.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+body {
+    margin: 0;
+    background: #0a0a0a;
+    color: #fff;
+    padding: 0;
+    padding-top: 70px;
+    min-height: 100vh;
+}
+.fixed-header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    background: #0a0a0a;
+    border-bottom: 1px solid #222;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+}
+.fixed-header h1 {
+    color: #ff2222;
+    font-size: 20px;
+    letter-spacing: 3px;
+    margin: 0;
+    flex-shrink: 0;
+}
+.fixed-header .header-sub {
+    color: #555;
+    font-size: 8px;
+    text-align: right;
+    line-height: 1.2;
+}
+.fixed-header .back-btn {
+    background: #222;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 10px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    display: none;
+    font-weight: bold;
+}
+.fixed-header .back-btn.visible { display: inline-block; }
+
+.main-content { padding: 12px; max-width: 500px; margin: 0 auto; }
+.card {
+    background: #151515;
+    border: 1px solid #333;
+    border-radius: 16px;
+    padding: 14px;
+    margin: 10px 0;
+}
+label { font-size: 11px; color: #888; display: block; margin-top: 10px; }
+input, textarea, select {
+    width: 100%;
+    padding: 13px;
+    background: #000;
+    border: 1px solid #444;
+    border-radius: 10px;
+    color: #fff;
+    margin-top: 4px;
+    font-size: 15px;
+    outline: none;
+}
+input:focus, textarea:focus, select:focus { border-color: #ff2222; }
+.btn {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 14px;
+    font-weight: bold;
+    font-size: 16px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+.btn-red { background: #ff2222; color: #fff; }
+.btn-green { background: #22c55e; color: #000; }
+.btn-dark { background: #222; color: #fff; border: 1px solid #444; }
+.btn-gold { background: #d4a017; color: #000; }
+.btn-purple { background: #7c3aed; color: #fff; }
+.btn-small { padding: 8px 12px; font-size: 12px; width: auto; margin-top: 4px; }
+
+#timer { font-size: 42px; text-align: center; font-weight: 900; color: #22c55e; margin: 10px 0; }
+.hidden { display: none !important; }
+.homeBtn { padding: 28px; font-size: 18px; border-radius: 20px; }
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1; }
+
+.locationBox {
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 5px;
+    text-align: center;
+    font-size: 11px;
+    min-height: 65px;
+}
+.location-good { color: #22c55e; }
+.location-loading { color: #888; }
+.location-error { color: #ff5555; }
+.mapLink { display: inline-block; margin-top: 8px; color: #22c55e; text-decoration: none; font-weight: bold; }
+.info { color: #666; font-size: 10px; text-align: center; line-height: 1.5; margin-top: 10px; }
+.warning {
+    background: #210b0b; border: 1px solid #552222; color: #ff7777;
+    border-radius: 10px; padding: 10px; margin-top: 10px; font-size: 10px; line-height: 1.5;
+}
+.success {
+    background: #09200f; border: 1px solid #155c2d; color: #4ade80;
+    border-radius: 10px; padding: 10px; margin-top: 10px; font-size: 10px;
+}
+
+.premium-badge {
+    display: inline-block;
+    background: #d4a017; color: #000;
+    font-size: 9px; font-weight: bold;
+    padding: 2px 6px; border-radius: 6px; margin-left: 6px; letter-spacing: 1px;
+}
+.lock-icon { font-size: 11px; color: #d4a017; }
+.member-row {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #1a1a1a; border: 1px solid #333; border-radius: 10px;
+    padding: 10px 12px; margin: 6px 0; font-size: 12px;
+}
+.member-row .member-name { color: #fff; font-weight: bold; }
+.member-row .member-dist { color: #22c55e; font-weight: bold; font-size: 11px; }
+.member-row .member-dist.far { color: #ff5555; }
+.group-code-box {
+    background: #000; border: 1px dashed #444; border-radius: 10px;
+    padding: 14px; text-align: center; font-size: 22px; font-weight: 900;
+    letter-spacing: 4px; color: #22c55e; margin-top: 4px;
+}
+.group-alert-banner {
+    background: #2a0000; border: 1px solid #ff2222; color: #ff7777;
+    border-radius: 12px; padding: 12px; margin-top: 10px; font-size: 11px; line-height: 1.5;
+}
+.group-alert-banner a { color: #22c55e; font-weight: bold; }
+.shake { animation: shake 0.35s; }
+@keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+}
+.price-tag { text-align: center; font-size: 22px; font-weight: 900; color: #d4a017; margin: 14px 0 4px 0; }
+.feature-list { font-size: 11px; color: #aaa; line-height: 1.8; margin-top: 8px; }
+.feature-list li { margin-left: 12px; }
+.long-press-hint { text-align: center; font-size: 9px; color: #444; margin-top: 6px; }
+.map-box {
+    width: 100%; height: 240px; border-radius: 12px; border: 1px solid #333;
+    margin-top: 8px; overflow: hidden; background: #000;
+}
+.map-box.tall { height: 300px; }
+.backend-status { text-align: center; font-size: 10px; color: #666; margin-top: 10px; }
+.backend-status .ok { color: #22c55e; }
+.backend-status .warn { color: #d4a017; }
+.backend-status .err { color: #ff5555; }
+.home-footer { display: flex; justify-content: center; gap: 16px; margin-top: 18px; font-size: 11px; }
+.home-footer a { color: #666; text-decoration: none; cursor: pointer; }
+.home-footer a:hover { color: #ff2222; }
+.legal h3 { margin: 14px 0 6px 0; color: #d4a017; font-size: 13px; }
+.legal p, .legal li { color: #aaa; font-size: 11.5px; line-height: 1.7; margin: 6px 0; }
+.legal ul { padding-left: 18px; margin: 6px 0; }
+.legal .brand { text-align: center; margin: 10px 0 14px 0; }
+.legal .brand .logo { font-size: 42px; }
+.legal .brand .name { font-size: 15px; font-weight: bold; color: #fff; margin-top: 6px; }
+.legal .brand .labs { font-size: 11px; color: #888; margin-top: 2px; }
+.legal .meta { text-align: center; font-size: 11px; color: #888; margin-top: 10px; line-height: 1.7; }
+.legal a { color: #22c55e; text-decoration: none; word-break: break-all; }
+.legal .updated { text-align: center; font-size: 10px; color: #555; margin-top: 12px; font-style: italic; }
+
+/* Partner list rows */
+.partner-row {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #1a1a1a; border: 1px solid #333; border-radius: 10px;
+    padding: 10px 12px; margin: 6px 0; font-size: 12px;
+}
+.partner-row .partner-code { color: #22c55e; font-weight: bold; letter-spacing: 1px; }
+.partner-row .partner-name { color: #fff; }
+.partner-row button { width: auto; padding: 6px 10px; font-size: 11px; margin: 0; }
+
+/* Found device result box */
+.found-box { background: #0d0d0d; border: 1px solid #333; border-radius: 12px; padding: 12px; margin-top: 10px; }
+.found-box .found-name { font-size: 15px; font-weight: bold; color: #fff; margin-bottom: 4px; }
+.found-box .found-code { font-size: 11px; color: #22c55e; letter-spacing: 2px; margin-bottom: 6px; }
+.found-box .found-meta { font-size: 10px; color: #888; line-height: 1.6; }
+.found-box .found-status-online { color: #22c55e; font-weight: bold; }
+.found-box .found-status-offline { color: #888; }
+</style>
+</head>
+
+<body>
+
+<header class="fixed-header">
+    <h1>DEAD HAND</h1>
+    <div style="display:flex;align-items:center;gap:10px;">
+        <span class="header-sub">SAFETY • FIND<br>FCM • GPS</span>
+        <button class="back-btn" id="backBtn" onclick="goBack()">← BACK</button>
+    </div>
+</header>
+
+<div class="main-content">
+
+<!-- AUTH SCREEN -->
+<div id="authScreen" class="hidden">
+    <div class="card" style="border-color:#ff2222">
+        <div style="text-align:center;font-size:48px;margin:6px 0;">☠️</div>
+        <h3 style="margin:0;color:#ff2222;text-align:center;letter-spacing:2px;">DEAD HAND</h3>
+        <div style="text-align:center;font-size:11px;color:#888;margin-top:5px;">
+            Create your account to receive safety alerts.
+        </div>
+
+        <label>EMAIL</label>
+        <input id="authEmail" type="email" placeholder="you@example.com" autocomplete="email">
+
+        <label>PASSWORD (min 6 characters)</label>
+        <input id="authPassword" type="password" placeholder="••••••••" autocomplete="new-password">
+
+        <label>DISPLAY NAME (optional)</label>
+        <input id="authName" type="text" placeholder="Alice" autocomplete="name">
+
+        <button class="btn btn-red" onclick="handleSignUp()">CREATE ACCOUNT</button>
+        <button class="btn btn-dark" onclick="handleSignIn()">I ALREADY HAVE AN ACCOUNT</button>
+
+        <div id="authMsg" class="hidden" style="margin-top:10px;"></div>
+
+        <div class="info">
+            Your email is only used to sign you in. Your location and contacts are never shared with anyone you didn't add.
+        </div>
+    </div>
+</div>
+
+<!-- CODE SCREEN (shown once after signup) -->
+<div id="codeScreen" class="hidden">
+    <div class="card" style="border-color:#22c55e">
+        <h3 style="margin:0;color:#22c55e;text-align:center;">YOUR UNIQUE CODE</h3>
+        <div style="text-align:center;font-size:11px;color:#888;margin-top:8px;">
+            Share this code with people you want to alert if you don't check in — or who you want to be able to find you.
+        </div>
+
+        <div class="group-code-box" id="myCodeBox">DH-______</div>
+
+        <button class="btn btn-dark" onclick="copyMyCode()">📋 COPY CODE</button>
+        <button class="btn btn-green" onclick="finishSignUp()">CONTINUE →</button>
+
+        <div class="info">
+            Anyone with this code can look up your last known location — so only share it with people you trust.
+        </div>
+    </div>
+</div>
+
+<!-- HOME SCREEN -->
+<div id="homeScreen" class="hidden">
+    <div class="card" style="text-align:center;padding:24px">
+        <div style="font-size:48px">☠️</div>
+        <div id="homeGreeting" style="color:#888;font-size:12px;margin:10px 0">Choose a mode.</div>
+
+        <button class="btn btn-red homeBtn" id="btnSafety" data-mode="safety">
+            🛡️ SAFETY MODE <span class="premium-badge">PREMIUM</span><br>
+            <span style="font-size:11px;font-weight:normal">1 Minute – 24 Hours <span class="lock-icon" id="lockSafety">🔒</span></span>
+        </button>
+
+        <button class="btn btn-purple homeBtn" onclick="openScreen('group')">
+            👥 GROUP SAFETY MODE <span style="font-size:9px;background:#22c55e;color:#000;font-weight:bold;padding:2px 6px;border-radius:6px;letter-spacing:1px;">FREE</span><br>
+            <span style="font-size:11px;font-weight:normal">Live GPS • 100m Auto-Alert</span>
+        </button>
+
+        <button class="btn btn-gold homeBtn" onclick="openScreen('find')">
+            🔍 FIND MY DEVICE<br>
+            <span style="font-size:11px;font-weight:normal">Enter a code to locate someone</span>
+        </button>
+
+        <button class="btn btn-dark" style="font-size:13px;padding:12px;" onclick="openScreen('profile')">
+            👤 MY PROFILE & CODE
+        </button>
+
+        <div class="long-press-hint">Tip: hold a premium button for 2s</div>
+
+        <div id="activeBanner" class="hidden card" style="border-color:#ff2222;background:#1a0000;">
+            <div style="color:#ff2222;font-weight:bold;text-align:center;">⚠️ SYSTEM ARMED</div>
+            <div id="activeText" style="text-align:center;font-size:12px;color:#ffcc66;margin-top:5px;"></div>
+            <div id="miniTimer" style="text-align:center;font-size:22px;font-weight:bold;color:#22c55e;margin-top:5px;"></div>
+            <button class="btn btn-green" onclick="resumeArmed()">OPEN ACTIVE SYSTEM</button>
+            <button class="btn btn-dark" onclick="disarm()">DISARM ALL</button>
+        </div>
+
+        <div class="home-footer">
+            <a onclick="openScreen('about')">About</a>
+            <a onclick="openScreen('policy')">Privacy Policy</a>
+            <a onclick="handleSignOut()">Sign Out</a>
+        </div>
+    </div>
+</div>
+
+<!-- PROFILE SCREEN -->
+<div id="profileScreen" class="hidden">
+    <div class="card" style="border-color:#7c3aed">
+        <h3 style="margin:0;color:#7c3aed;">👤 MY PROFILE</h3>
+
+        <label>MY UNIQUE CODE</label>
+        <div class="group-code-box" id="profileCode">DH-______</div>
+        <button class="btn btn-dark" onclick="copyMyCode()">📋 COPY CODE</button>
+
+        <label>EMAIL</label>
+        <input id="profileEmail" type="email" readonly>
+
+        <label>DISPLAY NAME</label>
+        <input id="profileName" type="text" placeholder="Your name">
+        <button class="btn btn-green" onclick="saveProfileName()">SAVE NAME</button>
+
+        <div class="info">
+            Give your code to family. Anyone with this code can look up your last known location.
+        </div>
+
+        <button class="btn btn-dark" onclick="goBack()">← BACK</button>
+    </div>
+</div>
+
+<!-- FIND MY DEVICE SCREEN -->
+<div id="findScreen" class="hidden">
+    <div class="card" style="border-color:#d4a017">
+        <h3 style="margin:0;color:#d4a017;">🔍 FIND MY DEVICE</h3>
+        <div style="font-size:10px;color:#777;margin-top:5px;">
+            Enter the unique code of the person you want to locate.
+        </div>
+
+        <label>DEVICE CODE</label>
+        <input id="findCode" type="text" placeholder="DH-XXXXXX" style="text-transform:uppercase;letter-spacing:3px;font-size:18px;text-align:center;">
+
+        <button class="btn btn-gold" onclick="lookupCode()">🔎 LOOK UP</button>
+
+        <div id="findResult"></div>
+
+        <div id="findMap" class="map-box hidden" style="margin-top:12px;"></div>
+
+        <button class="btn btn-dark" onclick="goBack()">← BACK</button>
+
+        <div class="info">Only the last known location is shown. Live tracking is only available in Group Safety Mode.</div>
+    </div>
+</div>
+
+<!-- ABOUT SCREEN -->
+<div id="aboutScreen" class="hidden">
+    <div class="card legal" style="border-color:#d4a017">
+        <div class="brand">
+            <div class="logo">☠️</div>
+            <div class="name">DEAD HAND</div>
+            <div class="labs">by Joheliv Labs</div>
+        </div>
+        <p style="text-align:center;color:#aaa;">
+            DEAD HAND is a personal safety app that notifies your trusted contacts through push notifications if you don't check in — and lets you locate a loved one with their unique code.
+        </p>
+        <h3>🛡️ Safety Mode</h3>
+        <p>Set a check-in timer. If you don't check in on time, your partners get a push notification with your last known location.</p>
+        <h3>👥 Group Safety Mode</h3>
+        <p>Invite 2–4 friends to a shared group using a code. Everyone sees each other live on a map.</p>
+        <h3>🔍 Find My Device</h3>
+        <p>Enter a person's unique code to see their last known location and online status.</p>
+        <h3>👤 Who We Are</h3>
+        <p><strong>Joheliv Labs</strong> — also known as <strong>Jason's Labs</strong> — an independent software studio based in South Africa.</p>
+        <div class="meta">
+            <div>🇿🇦 <strong>South Africa</strong></div>
+            <div>© 2026 Joheliv Labs · Jason's Labs</div>
+            <div>Contact: <a href="mailto:deadhandjoheliv@gmail.com">deadhandjoheliv@gmail.com</a></div>
+        </div>
+        <button class="btn btn-dark" onclick="goBack()" style="margin-top:18px;">← BACK</button>
+    </div>
+</div>
+
+<!-- PRIVACY POLICY SCREEN -->
+<div id="policyScreen" class="hidden">
+    <div class="card legal" style="border-color:#7c3aed">
+        <h3 style="margin-top:0;color:#7c3aed;">📜 PRIVACY POLICY</h3>
+        <div class="updated">Last updated: 2026</div>
+        <p>Joheliv Labs ("we", "us") respects your privacy.</p>
+        <h3>1. What We Collect</h3>
+        <ul>
+            <li><strong>GPS location</strong> — to include a map link in alerts and show your last known position when someone uses your code.</li>
+            <li><strong>Email & password</strong> — to sign you in via Firebase Authentication.</li>
+            <li><strong>Display name and unique code</strong> — so others can locate you or receive your alerts.</li>
+            <li><strong>Device identifier</strong> — a random ID stored in your browser.</li>
+        </ul>
+        <h3>2. Who Sees Your Data</h3>
+        <ul>
+            <li><strong>People you share your code with</strong> — can see your name, online status, and last known location.</li>
+            <li><strong>Your group members</strong> — see your live location only while Group Mode is active.</li>
+            <li>We do not sell or rent your data.</li>
+        </ul>
+        <h3>3. Data Retention</h3>
+        <p>Your data stays in Firebase until you delete your account. Email us at <a href="mailto:deadhandjoheliv@gmail.com">deadhandjoheliv@gmail.com</a> to request deletion.</p>
+        <h3>4. Contact</h3>
+        <p>Joheliv Labs · Jason's Labs<br>South Africa 🇿🇦<br><a href="mailto:deadhandjoheliv@gmail.com">deadhandjoheliv@gmail.com</a></p>
+        <button class="btn btn-dark" onclick="goBack()" style="margin-top:18px;">← BACK</button>
+    </div>
+</div>
+
+<!-- PREMIUM SCREEN -->
+<div id="premiumScreen" class="hidden">
+    <div class="card" style="border-color:#d4a017">
+        <h3 style="margin:0;color:#d4a017;">🔒 PREMIUM MODE</h3>
+        <div id="premiumTitle" style="font-size:11px;color:#888;margin-top:5px;">Unlock this mode to continue.</div>
+        <ul class="feature-list" id="premiumFeatures"></ul>
+        <div class="price-tag">R50 <span style="font-size:12px;color:#888;">once-off</span></div>
+        <button class="btn btn-gold" onclick="startPayment()">💳 PAY NOW</button>
+        <button class="btn btn-dark" onclick="goBack()">← BACK</button>
+        <div class="info">Secure payment gateway opens in the next screen.</div>
+    </div>
+</div>
+
+<!-- DEVELOPER SCREEN -->
+<div id="developerScreen" class="hidden">
+    <div class="card" style="border-color:#7c3aed">
+        <h3 style="margin:0;color:#7c3aed;">🔧 DEVELOPER ACCESS</h3>
+        <div style="font-size:10px;color:#666;margin-top:5px;">Enter developer key to unlock premium modes.</div>
+        <label>DEVELOPER KEY</label>
+        <input id="devKeyInput" type="password" inputmode="numeric" placeholder="••••••••••••" autocomplete="off">
+        <button class="btn btn-purple" onclick="submitDevKey()">UNLOCK</button>
+        <button class="btn btn-dark" onclick="goBack()">CANCEL</button>
+        <div id="devKeyMsg" class="hidden" style="margin-top:10px;"></div>
+    </div>
+</div>
+
+<!-- GROUP SCREEN -->
+<div id="groupScreen" class="hidden">
+    <div class="card" style="border-color:#7c3aed">
+        <h3 style="margin:0;color:#7c3aed;">👥 GROUP SAFETY MODE</h3>
+        <div style="font-size:10px;color:#777;margin-top:5px;">2–4 phones • Live GPS • 100m auto-alert</div>
+
+        <label>YOUR NAME</label>
+        <input id="g_name" type="text" placeholder="Alice">
+
+        <label>GROUP CODE (share with friends)</label>
+        <div class="group-code-box" id="g_codeBox">DH-____</div>
+        <div class="row" style="margin-top:6px;">
+            <button class="btn btn-dark" style="margin-top:0" onclick="generateGroupCode()">🔄 GENERATE</button>
+        </div>
+
+        <label>OR JOIN EXISTING GROUP</label>
+        <div class="row">
+            <input id="g_joinCode" type="text" placeholder="DH-XXXXX" style="text-transform:uppercase;">
+            <button class="btn btn-dark" style="margin-top:0;max-width:110px;" onclick="joinGroup()">JOIN</button>
+        </div>
+
+        <label>ALERT DISTANCE (METRES)</label>
+        <input id="g_alertDist" type="number" value="100" min="20" max="5000" step="10">
+
+        <label>GROUP MEMBERS</label>
+        <div id="g_members"><div class="info" style="margin-top:4px;">No members yet. Start tracking to see live positions.</div></div>
+
+        <label>LIVE MAP</label>
+        <div id="g_map" class="map-box"></div>
+
+        <div id="g_alertArea"></div>
+
+        <button class="btn btn-green" onclick="startGroupTracking()">🚀 START GROUP TRACKING</button>
+        <button class="btn btn-red" onclick="stopGroupTracking()">🛑 STOP GROUP TRACKING</button>
+        <button class="btn btn-dark" onclick="goBack()">← BACK TO HOME</button>
+
+        <div class="backend-status" id="g_backendStatus">Backend: <span class="warn">not connected</span></div>
+    </div>
+</div>
+
+<!-- SAFETY SCREEN (partners by code) -->
+<div id="safetyScreen" class="hidden">
+    <div class="card">
+        <h3 style="margin:0;color:#ff4444;">🛡️ SAFETY MODE</h3>
+        <div style="font-size:10px;color:#777;margin-top:5px;">Set a check-in period. If you don't check in, your partners get an instant push.</div>
+
+        <label>WHERE ARE YOU GOING?</label>
+        <input id="s_where" placeholder="Alice taxi rank to town">
+
+        <div class="row">
+            <div><label>DURATION</label><input id="s_num" type="number" value="1" min="1" max="24" step="1"></div>
+            <div><label>UNIT</label>
+                <select id="s_unit">
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                </select>
+            </div>
+        </div>
+
+        <label>LIVE LOCATION</label>
+        <div id="s_loc" class="locationBox location-loading">📍 Getting your GPS location...</div>
+        <div id="s_map" class="map-box"></div>
+        <button class="btn btn-dark" onclick="requestGPS()" style="font-size:13px;padding:12px;">📍 UPDATE MY LOCATION</button>
+
+        <label>PARTNER 1 — UNIQUE CODE</label>
+        <input id="s_p1code" type="text" placeholder="DH-XXXXXX" style="text-transform:uppercase;letter-spacing:2px;text-align:center;">
+
+        <label>PARTNER 2 — UNIQUE CODE (OPTIONAL)</label>
+        <input id="s_p2code" type="text" placeholder="DH-XXXXXX" style="text-transform:uppercase;letter-spacing:2px;text-align:center;">
+
+        <div id="s_partnerStatus" class="info" style="margin-top:10px;"></div>
+
+        <button class="btn btn-red" onclick="arm('safety')">🔴 ARM SAFETY MODE</button>
+        <div class="warning">⚠️ If you do not check in before the timer reaches zero, your partners get a push notification with your last known location.</div>
+    </div>
+</div>
+
+<!-- ARMED SCREEN -->
+<div id="armedScreen" class="hidden card">
+    <div id="timer">--:--:--</div>
+    <div style="text-align:center;font-size:12px;">
+        <span id="modeShow" style="font-size:11px;color:#888;"></span> • <span id="whereShow" style="color:#ffcc66;font-size:12px;"></span>
+    </div>
+    <div id="locShow" class="locationBox location-loading">📍 Getting location...</div>
+    <div id="armedMap" class="map-box tall"></div>
+    <button class="btn btn-green" onclick="checkIn()">✅ I'M ALIVE - RESET</button>
+    <button class="btn btn-dark" onclick="disarm()">DISARM - I'M SAFE</button>
+    <button class="btn btn-dark" onclick="openScreen('home')">MINIMIZE TO HOME</button>
+    <div id="smsStatus" class="hidden"></div>
+    <div class="info">Your last known GPS location is saved and included in the alert sent to your partners.</div>
+</div>
+
+</div>
+
+<script>
+
+// ============================================
+// SECRETS
+// ============================================
+const SECRETS = window.DH_SECRETS || {};
+const BULKSMS_TOKEN_ID     = SECRETS.BULKSMS_TOKEN_ID     || "";
+const BULKSMS_TOKEN_SECRET = SECRETS.BULKSMS_TOKEN_SECRET || "";
+const RESEND_API_KEY       = SECRETS.RESEND_API_KEY       || "";
+const RESEND_FROM_EMAIL    = SECRETS.RESEND_FROM_EMAIL    || "onboarding@resend.dev";
+const FCM_VAPID_KEY        = "BL4N-Yng9CvdCYE45m2W1xi_TwXn_a3GN4HMAJx-mamdGQcRyHm8BWIzdiCYkzRlRbGoJNYuPtRDOcDYIruohKc";
+
+// ============================================
+// FIREBASE CONFIG
+// ============================================
+const firebaseConfig = {
+    apiKey:            "AIzaSyDNF5lQPOykjetuB4fPQ6XalQJnuWvc9PQ",
+    authDomain:        "dead-man-s-switch-3344a.firebaseapp.com",
+    databaseURL:       "https://dead-man-s-switch-3344a-default-rtdb.firebaseio.com",
+    projectId:         "dead-man-s-switch-3344a",
+    storageBucket:     "dead-man-s-switch-3344a.firebasestorage.app",
+    messagingSenderId: "643809059953",
+    appId:             "1:643809059953:web:387f2b42f7acc480cc67d0",
+    measurementId:     "G-E5LF7CE734"
+};
+
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+const auth = firebase.auth();
+
+function getDeviceId() {
+    let deviceId = localStorage.getItem("dh_device_id");
+    if (!deviceId) {
+        deviceId = "device_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem("dh_device_id", deviceId);
+    }
+    return deviceId;
+}
+const DEVICE_ID = getDeviceId();
+
+const BACKEND = "firebase";
+const DEVELOPER_KEY = "0105075874088";
+
+// ============================================
+// GLOBAL STATE
+// ============================================
+let currentUser = null;
+let currentUserCode = null;
+let currentUserName = "";
+
+let deadline = 0;
+let interval = null;
+let gpsWatch = null;
+let lastLatitude = null;
+let lastLongitude = null;
+let lastAccuracy = null;
+let triggered = false;
+
+let groupCode = null;
+let groupMyName = "";
+let groupAlertDistance = 100;
+let groupTrackingActive = false;
+let groupPushTimer = null;
+let groupMembers = {};
+let groupLastAlertAt = {};
+
+let mapSafety = null, mapArmed = null, mapGroup = null, mapFind = null;
+let markerSafety = null, markerArmed = null, markerFind = null;
+let groupMarkers = {};
+
+function $(id) { return document.getElementById(id); }
+
+// ============================================
+// SIGN-UP / SIGN-IN
+// ============================================
+function generateUserCode() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "DH-";
+    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    return code;
+}
+
+async function getUniqueCode() {
+    for (let attempt = 0; attempt < 10; attempt++) {
+        const code = generateUserCode();
+        const snap = await database.ref("codes/" + code).once("value");
+        if (!snap.exists()) return code;
+    }
+    throw new Error("Could not generate a unique code after 10 attempts.");
+}
+
+function showAuthMsg(text, type) {
+    const el = $("authMsg");
+    if (!el) return;
+    el.className = type === "success" ? "success" : "warning";
+    el.classList.remove("hidden");
+    el.textContent = text;
+}
+
+async function handleSignUp() {
+    const email = $("authEmail").value.trim();
+    const password = $("authPassword").value;
+    const name = $("authName").value.trim();
+
+    if (!email || !password) { showAuthMsg("Please enter email and password.", "error"); return; }
+    if (password.length < 6) { showAuthMsg("Password must be at least 6 characters.", "error"); return; }
+
+    try {
+        const cred = await auth.createUserWithEmailAndPassword(email, password);
+        const uid = cred.user.uid;
+
+        const code = await getUniqueCode();
+        await database.ref("codes/" + code).set(uid);
+
+        await database.ref("users/" + uid + "/profile").set({
+            uid, email,
+            name: name || "User",
+            code,
+            deviceId: DEVICE_ID,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        });
+
+        currentUserCode = code;
+        currentUserName = name || "User";
+
+        const box = $("myCodeBox");
+        if (box) box.textContent = code;
+        openScreen("code");
+    } catch (err) {
+        showAuthMsg("Sign-up failed: " + (err.message || err.code), "error");
+    }
+}
+
+async function handleSignIn() {
+    const email = $("authEmail").value.trim();
+    const password = $("authPassword").value;
+
+    if (!email || !password) { showAuthMsg("Please enter email and password.", "error"); return; }
+
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+        // onAuthStateChanged will handle the rest
+    } catch (err) {
+        showAuthMsg("Sign-in failed: " + (err.message || err.code), "error");
+    }
+}
+
+function copyMyCode() {
+    if (!currentUserCode) return;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(currentUserCode).then(() => {
+            alert("Code copied: " + currentUserCode);
+        }).catch(() => alert("Your code: " + currentUserCode));
+    } else {
+        alert("Your code: " + currentUserCode);
+    }
+}
+
+function finishSignUp() { openScreen("home"); }
+
+function handleSignOut() {
+    if (!confirm("Sign out of DEAD HAND?")) return;
+    auth.signOut().then(() => {
+        localStorage.clear();
+        location.reload();
+    });
+}
+
+async function saveProfileName() {
+    if (!currentUser) return;
+    const name = $("profileName").value.trim();
+    if (!name) { alert("Please enter a name."); return; }
+    try {
+        await database.ref("users/" + currentUser.uid + "/profile/name").set(name);
+        currentUserName = name;
+        updateHomeGreeting();
+        alert("Name saved.");
+    } catch (e) { alert("Failed to save: " + e.message); }
+}
+
+function updateHomeGreeting() {
+    const el = $("homeGreeting");
+    if (el && currentUser) {
+        el.innerText = "Welcome, " + (currentUserName || "User") + " • " + (currentUserCode || "");
+    }
+}
+
+// ============================================
+// AUTH STATE
+// ============================================
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        currentUser = user;
+        const snap = await database.ref("users/" + user.uid + "/profile").once("value");
+        const profile = snap.val() || {};
+        currentUserCode = profile.code || null;
+        currentUserName = profile.name || "User";
+
+        // Refresh last active & device mapping
+        database.ref("users/" + user.uid + "/profile").update({
+            deviceId: DEVICE_ID,
+            lastActive: Date.now(),
+            updatedAt: Date.now()
+        }).catch(() => {});
+
+        const pEmail = $("profileEmail"); if (pEmail) pEmail.value = profile.email || "";
+        const pName  = $("profileName");  if (pName)  pName.value  = profile.name  || "";
+        const pCode  = $("profileCode");  if (pCode)  pCode.textContent = currentUserCode || "DH-______";
+
+        updateHomeGreeting();
+        openScreen("home");
+    } else {
+        currentUser = null;
+        currentUserCode = null;
+        currentUserName = "";
+        openScreen("auth");
+    }
+});
+
+// ============================================
+// LOOKUP CODE (Find My Device)
+// ============================================
+async function lookupCode() {
+    const raw = $("findCode").value.trim().toUpperCase();
+    const resultEl = $("findResult");
+    const mapEl = $("findMap");
+    if (!raw) { alert("Enter a code."); return; }
+
+    resultEl.innerHTML = '<div class="info">Looking up...</div>';
+    mapEl.classList.add("hidden");
+
+    try {
+        // Resolve code → uid
+        const codeSnap = await database.ref("codes/" + raw).once("value");
+        if (!codeSnap.exists()) {
+            resultEl.innerHTML = '<div class="warning">No device found with that code.</div>';
+            return;
+        }
+        const uid = codeSnap.val();
+
+        // Fetch profile
+        const profSnap = await database.ref("users/" + uid + "/profile").once("value");
+        const profile = profSnap.val() || {};
+        const loc = profile.lastLocation || null;
+        const now = Date.now();
+        const online = profile.lastActive && (now - profile.lastActive < 120000);
+
+        if (!loc || loc.lat == null) {
+            resultEl.innerHTML =
+                '<div class="found-box">' +
+                '<div class="found-name">' + escapeHtml(profile.name || "User") + '</div>' +
+                '<div class="found-code">' + escapeHtml(profile.code || raw) + '</div>' +
+                '<div class="found-meta">' +
+                'Status: <span class="' + (online ? "found-status-online" : "found-status-offline") + '">' +
+                (online ? "Online" : "Offline") + '</span><br>' +
+                'No location recorded yet.' +
+                '</div></div>';
+            return;
+        }
+
+        const mapURL = "https://maps.google.com/?q=" + loc.lat + "," + loc.lon;
+        resultEl.innerHTML =
+            '<div class="found-box">' +
+            '<div class="found-name">' + escapeHtml(profile.name || "User") + '</div>' +
+            '<div class="found-code">' + escapeHtml(profile.code || raw) + '</div>' +
+            '<div class="found-meta">' +
+            'Status: <span class="' + (online ? "found-status-online" : "found-status-offline") + '">' +
+            (online ? "Online" : "Offline") + '</span><br>' +
+            'Last seen: ' + new Date(loc.time || 0).toLocaleString() + '<br>' +
+            'Coordinates: ' + Number(loc.lat).toFixed(6) + ', ' + Number(loc.lon).toFixed(6) + (loc.acc ? '<br>Accuracy: ' + Math.round(loc.acc) + 'm' : '') +
+            '<br><a class="mapLink" href="' + mapURL + '" target="_blank">🗺️ OPEN IN GOOGLE MAPS</a>' +
+            '</div></div>';
+
+        mapEl.classList.remove("hidden");
+        if (!mapFind) {
+            mapFind = L.map("findMap", { zoomControl: true, attributionControl: false }).setView([loc.lat, loc.lon], 15);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapFind);
+        } else {
+            mapFind.setView([loc.lat, loc.lon], 15);
+        }
+        if (markerFind) mapFind.removeLayer(markerFind);
+        markerFind = L.marker([loc.lat, loc.lon]).addTo(mapFind).bindPopup(escapeHtml(profile.name || "User"));
+        setTimeout(() => mapFind.invalidateSize(), 150);
+    } catch (e) {
+        resultEl.innerHTML = '<div class="warning">Lookup failed: ' + escapeHtml(e.message) + '</div>';
+    }
+}
+
+// ============================================
+// PARTNERS (resolve codes when arming)
+// ============================================
+async function resolvePartnerCodes(codes) {
+    const partners = [];
+    for (const raw of codes) {
+        if (!raw) continue;
+        const code = raw.trim().toUpperCase();
+        if (!code) continue;
+        const snap = await database.ref("codes/" + code).once("value");
+        if (!snap.exists()) {
+            return { error: "Unknown code: " + code };
+        }
+        const uid = snap.val();
+        const profSnap = await database.ref("users/" + uid + "/profile").once("value");
+        const profile = profSnap.val() || {};
+        partners.push({ uid, code, name: profile.name || "Partner", fcmToken: profile.fcmToken || null });
+    }
+    return { partners };
+}
+
+// ============================================
+// SEND FCM ALERT (write to alert inbox)
+// ============================================
+async function sendFcmAlertToPartners(partners, payload) {
+    // Write an alert to each partner's inbox
+    for (const p of partners) {
+        if (!p.uid) continue;
+        try {
+            await database.ref("alerts/" + p.uid).push({
+                from: currentUser ? currentUser.uid : "unknown",
+                fromCode: currentUserCode || "UNKNOWN",
+                fromName: currentUserName || "User",
+                mode: payload.mode || "safety",
+                message: payload.message || "",
+                lat: payload.lat,
+                lon: payload.lon,
+                acc: payload.acc,
+                mapLink: payload.mapLink,
+                createdAt: Date.now(),
+                read: false
+            });
+        } catch (e) {
+            console.warn("FCM alert write failed for", p.code, e.message);
+        }
+    }
+    // Note: actual push notification is triggered by a Cloud Function
+    // that watches alerts/ and uses the partner's FCM token.
+}
+
+// ============================================
+// GROUP SAFETY MODE
+// ============================================
+function generateGroupCode() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "DH-";
+    for (let i = 0; i < 5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    groupCode = code;
+    const box = $("g_codeBox"); if (box) box.textContent = code;
+}
+function normalizeGroupCode(raw) {
+    if (!raw) return null;
+    let c = raw.trim().toUpperCase().replace(/\s/g, "");
+    if (!c.startsWith("DH-")) { c = c.replace(/^DH/, ""); c = "DH-" + c; }
+    return c;
+}
+function joinGroup() {
+    const inp = $("g_joinCode"); if (!inp) return;
+    const c = normalizeGroupCode(inp.value);
+    if (!c || c.length < 4) { alert("Please enter a valid group code."); return; }
+    groupCode = c;
+    const box = $("g_codeBox"); if (box) box.textContent = c;
+    alert("✅ Joined group: " + c);
+}
+function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371000, toRad = (d) => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function startGroupTracking() {
+    const nameInp = $("g_name"), distInp = $("g_alertDist");
+    groupMyName = (nameInp && nameInp.value.trim()) || (currentUserName || "Member");
+    groupAlertDistance = parseInt((distInp && distInp.value) || "100", 10);
+    if (isNaN(groupAlertDistance) || groupAlertDistance < 20) groupAlertDistance = 100;
+
+    if (!groupCode) generateGroupCode();
+    if (!groupCode) { alert("Please generate or join a group first."); return; }
+    if (!navigator.geolocation) { alert("GPS not supported."); return; }
+
+    groupTrackingActive = true;
+    initGroupMap();
+
+    if (gpsWatch !== null) { navigator.geolocation.clearWatch(gpsWatch); gpsWatch = null; }
+    gpsWatch = navigator.geolocation.watchPosition(
+        (pos) => {
+            lastLatitude = pos.coords.latitude;
+            lastLongitude = pos.coords.longitude;
+            lastAccuracy = pos.coords.accuracy || 0;
+            saveMyLocationToFirebase();
+            firebasePushPosition({ lat: lastLatitude, lon: lastLongitude, accuracy: lastAccuracy, timestamp: Date.now() });
+            updateGroupMap(groupMembers);
+        },
+        (err) => console.warn("Group GPS err:", err.message),
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 }
+    );
+
+    if (groupPushTimer) clearInterval(groupPushTimer);
+    groupPushTimer = setInterval(() => {
+        if (lastLatitude != null) firebasePushPosition({ lat: lastLatitude, lon: lastLongitude, accuracy: lastAccuracy || 0, timestamp: Date.now() });
+    }, 5000);
+
+    firebaseConnect({ groupCode, myDeviceId: DEVICE_ID, myName: groupMyName });
+    renderGroupMembers({});
+    alert("🚀 Group tracking started.\nShare code: " + groupCode);
+}
+function stopGroupTracking() {
+    groupTrackingActive = false;
+    if (groupPushTimer) { clearInterval(groupPushTimer); groupPushTimer = null; }
+    if (gpsWatch !== null && navigator.geolocation) { navigator.geolocation.clearWatch(gpsWatch); gpsWatch = null; }
+    firebaseDisconnect();
+    const list = $("g_members");
+    if (list) list.innerHTML = '<div class="info" style="margin-top:4px;">Tracking stopped.</div>';
+    if (groupMarkers) {
+        Object.keys(groupMarkers).forEach((k) => { if (mapGroup && groupMarkers[k]) mapGroup.removeLayer(groupMarkers[k]); });
+        groupMarkers = {};
+    }
+    alert("🛑 Group tracking stopped.");
+}
+function renderGroupMembers(members) {
+    const list = $("g_members"); if (!list) return;
+    const keys = Object.keys(members || {});
+    if (keys.length === 0) {
+        list.innerHTML = '<div class="info" style="margin-top:4px;">No members yet. Share the code so friends can join.</div>';
+        return;
+    }
+    const now = Date.now();
+    list.innerHTML = keys.map((k) => {
+        const m = members[k]; if (!m) return "";
+        const isMe = (k === DEVICE_ID);
+        const ageSec = Math.round((now - (m.updatedAt || 0)) / 1000);
+        const stale = ageSec > 30 || m.online === false;
+        let distText = "—", far = false;
+        if (lastLatitude != null && m.lat != null && !isMe) {
+            const d = haversine(lastLatitude, lastLongitude, m.lat, m.lon);
+            distText = Math.round(d) + "m"; far = d > groupAlertDistance;
+        } else if (isMe) distText = "you";
+        const dot = stale ? "⚪" : (far ? "🔴" : "🟢");
+        const nameLabel = (m.name || "Member") + (isMe ? " (you)" : "");
+        return '<div class="member-row"><span class="member-name">' + escapeHtml(nameLabel) + '</span>' +
+               '<span class="member-dist' + (far ? " far" : "") + '">' + dot + " " + distText + (far ? " ⚠️ FAR" : "") + '</span></div>';
+    }).filter(Boolean).join("");
+}
+function evaluateDistances(members) {
+    if (!groupTrackingActive || !groupCode) return;
+    if (lastLatitude == null) return;
+    const now = Date.now();
+    Object.keys(members || {}).forEach((k) => {
+        if (k === DEVICE_ID) return;
+        const m = members[k]; if (!m || m.lat == null) return;
+        if ((now - (m.updatedAt || 0)) / 1000 > 30) return;
+        const d = haversine(lastLatitude, lastLongitude, m.lat, m.lon);
+        if (d > groupAlertDistance) {
+            const lastAt = groupLastAlertAt[k] || 0;
+            if (now - lastAt > 60000) {
+                groupLastAlertAt[k] = now;
+                firebaseSendFarAlert({ targetDeviceId: k, distance: d, myLat: lastLatitude, myLon: lastLongitude, myName: groupMyName });
+            }
+        }
+    });
+}
+function showGroupAlert(a) {
+    const area = $("g_alertArea");
+    const mapLink = a.mapLink || "";
+    const html = '<div class="group-alert-banner">⚠️ <b>' + escapeHtml(a.fromName || "Member") + '</b> is ' + Math.round(a.distance || 0) + 'm away!' +
+                 '<br>' + (mapLink ? '<a href="' + mapLink + '" target="_blank">🗺️ Open map</a>' : '') + '</div>';
+    if (area) area.insertAdjacentHTML("afterbegin", html);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
+}
+
+// ============================================
+// FIREBASE GROUP IMPL
+// ============================================
+let fbMembersRef = null, fbMembersListener = null;
+let fbAlertsRef = null, fbAlertsListener = null;
+
+function firebaseConnect({ groupCode: gc, myDeviceId }) {
+    firebaseDisconnect();
+    fbMembersRef = database.ref("groups/" + gc + "/members");
+    fbMembersListener = fbMembersRef.on("value", function(snap) {
+        const members = snap.val() || {};
+        groupMembers = members;
+        renderGroupMembers(members);
+        updateGroupMap(members);
+        evaluateDistances(members);
+    }, function(err){ console.warn("fb members err", err.message); });
+
+    fbAlertsRef = database.ref("groups/" + gc + "/alerts/" + myDeviceId);
+    fbAlertsListener = fbAlertsRef.on("child_added", function(snap) {
+        const a = snap.val(); if (!a) return;
+        if (Date.now() - (a.createdAt || 0) > 120000) return;
+        showGroupAlert(a);
+    }, function(err){ console.warn("fb alerts err", err.message); });
+}
+function firebaseDisconnect() {
+    if (fbMembersRef && fbMembersListener) fbMembersRef.off("value", fbMembersListener);
+    fbMembersRef = null; fbMembersListener = null;
+    if (fbAlertsRef && fbAlertsListener) fbAlertsRef.off("child_added", fbAlertsListener);
+    fbAlertsRef = null; fbAlertsListener = null;
+    if (groupCode) database.ref("groups/" + groupCode + "/members/" + DEVICE_ID)
+        .update({ online: false, updatedAt: Date.now() }).catch(()=>{});
+}
+function firebasePushPosition({ lat, lon, accuracy, timestamp }) {
+    if (!groupCode) return;
+    database.ref("groups/" + groupCode + "/members/" + DEVICE_ID).set({
+        name: groupMyName, lat, lon, accuracy,
+        updatedAt: timestamp || Date.now(), online: true, deviceId: DEVICE_ID
+    }).catch(() => {});
+}
+function firebaseSendFarAlert({ targetDeviceId, distance, myLat, myLon, myName }) {
+    if (!groupCode) return;
+    database.ref("groups/" + groupCode + "/alerts/" + targetDeviceId).push().set({
+        fromDeviceId: DEVICE_ID,
+        fromName: myName || groupMyName || "Member",
+        distance: Math.round(distance),
+        myLat, myLon,
+        mapLink: "https://maps.google.com/?q=" + myLat + "," + myLon,
+        createdAt: Date.now()
+    }).catch(() => {});
+}
+
+// ============================================
+// SAVE MY LOCATION TO FIREBASE
+// ============================================
+function saveMyLocationToFirebase() {
+    if (!currentUser) return;
+    if (lastLatitude == null || lastLongitude == null) return;
+    database.ref("users/" + currentUser.uid + "/profile/lastLocation").set({
+        lat: lastLatitude,
+        lon: lastLongitude,
+        acc: lastAccuracy || 0,
+        time: Date.now()
+    }).catch(() => {});
+    database.ref("users/" + currentUser.uid + "/profile/lastActive").set(Date.now()).catch(() => {});
+}
+
+// ============================================
+// PREMIUM GATE
+// ============================================
+function isPremium(mode) {
+    if (mode === "safety") return localStorage.getItem("dh_premium_safety") === "1";
+    return false;
+}
+function setPremium(mode, on) {
+    if (mode === "safety") localStorage.setItem("dh_premium_safety", on ? "1" : "0");
+    refreshLockIcons();
+}
+function refreshLockIcons() {
+    const ls = $("lockSafety"); if (ls) ls.textContent = isPremium("safety") ? "🔓" : "🔒";
+}
+function openPremiumScreen(mode) {
+    const title = $("premiumTitle"), feats = $("premiumFeatures");
+    if (title) title.textContent = "Unlock SAFETY MODE — countdown timer with partner push alerts.";
+    if (feats) feats.innerHTML =
+        "<li>Countdown timer 1 min – 24 hrs</li>" +
+        "<li>Push notifications to your partners</li>" +
+        "<li>Live GPS map included in every alert</li>";
+    openScreen("premium");
+}
+function startPayment() {
+    alert("💳 Payment gateway placeholder.\n\nUse the developer key to unlock for testing.");
+}
+function openDeveloperScreen() {
+    const inp = $("devKeyInput"), msg = $("devKeyMsg");
+    if (inp) inp.value = "";
+    if (msg) { msg.classList.add("hidden"); msg.textContent = ""; }
+    openScreen("developer");
+    setTimeout(() => { if (inp) inp.focus(); }, 150);
+}
+function submitDevKey() {
+    const inp = $("devKeyInput"), msg = $("devKeyMsg");
+    if (!inp) return;
+    if (inp.value.trim() === DEVELOPER_KEY) {
+        setPremium("safety", true);
+        if (msg) { msg.className = "success"; msg.classList.remove("hidden"); msg.textContent = "✅ Developer unlock successful."; }
+        setTimeout(() => { openScreen("home"); refreshLockIcons(); }, 900);
+    } else {
+        if (msg) { msg.className = "warning"; msg.classList.remove("hidden"); msg.textContent = "❌ Invalid key."; }
+        inp.classList.add("shake"); setTimeout(() => inp.classList.remove("shake"), 400);
+        if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+    }
+}
+
+// ============================================
+// LONG-PRESS
+// ============================================
+function attachLongPress(el, onTap, onLongPress, duration) {
+    if (!el) return;
+    let timer = null, longFired = false;
+    const start = () => { longFired = false; timer = setTimeout(() => { longFired = true; if (navigator.vibrate) navigator.vibrate(60); onLongPress(); }, duration || 2000); };
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    const end = () => { if (timer) { clearTimeout(timer); timer = null; } if (!longFired) onTap(); };
+    el.addEventListener("mousedown", start);
+    el.addEventListener("touchstart", start, { passive: true });
+    el.addEventListener("mouseup", end);
+    el.addEventListener("touchend", end);
+    el.addEventListener("mouseleave", cancel);
+    el.addEventListener("touchcancel", cancel);
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+function handleModeTap(mode) {
+    if (mode === "safety") {
+        if (isPremium("safety")) openScreen("safety");
+        else openPremiumScreen("safety");
+    }
+}
+
+// ============================================
+// LEAFLET MAPS
+// ============================================
+function makeMap(containerId) {
+    if (!$(containerId) || !window.L) return null;
+    const map = L.map(containerId, { zoomControl: true, attributionControl: false }).setView([0, 0], 2);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    return map;
+}
+function initSafetyMap() { if (!mapSafety) mapSafety = makeMap("s_map"); return mapSafety; }
+function initArmedMap()   { if (!mapArmed)  mapArmed  = makeMap("armedMap"); return mapArmed; }
+function initGroupMap()   { if (!mapGroup)  mapGroup  = makeMap("g_map"); return mapGroup; }
+function updateSafetyMap(lat, lon) {
+    const map = initSafetyMap(); if (!map) return;
+    map.setView([lat, lon], 16);
+    if (markerSafety) map.removeLayer(markerSafety);
+    markerSafety = L.marker([lat, lon]).addTo(map).bindPopup("You are here");
+}
+function updateArmedMap(lat, lon) {
+    const map = initArmedMap(); if (!map) return;
+    map.setView([lat, lon], 16);
+    if (markerArmed) map.removeLayer(markerArmed);
+    markerArmed = L.marker([lat, lon]).addTo(map).bindPopup("Last known");
+}
+function updateGroupMap(members) {
+    const map = initGroupMap(); if (!map) return;
+    const bounds = [];
+    Object.keys(members || {}).forEach((k) => {
+        const m = members[k]; if (!m || m.lat == null) return;
+        const isMe = (k === DEVICE_ID);
+        const nameLabel = (m.name || "Member") + (isMe ? " (you)" : "");
+        const color = isMe ? "#22c55e" : "#7c3aed";
+        if (!groupMarkers[k]) groupMarkers[k] = L.circleMarker([m.lat, m.lon], { radius: 10, color, fillColor: color, fillOpacity: 0.9, weight: 2 }).addTo(map).bindPopup(nameLabel);
+        else groupMarkers[k].setLatLng([m.lat, m.lon]).setPopupContent(nameLabel);
+        bounds.push([m.lat, m.lon]);
+    });
+    if (bounds.length === 1) map.setView(bounds[0], 16);
+    else if (bounds.length > 1) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 });
+}
+
+// ============================================
+// NAVIGATION
+// ============================================
+function showBackButton(show) {
+    const btn = $("backBtn"); if (!btn) return;
+    if (show) btn.classList.add("visible"); else btn.classList.remove("visible");
+}
+function goBack() { openScreen('home'); }
+
+function openScreen(name) {
+    ['authScreen', 'codeScreen', 'homeScreen', 'safetyScreen', 'armedScreen',
+     'premiumScreen', 'developerScreen', 'groupScreen',
+     'aboutScreen', 'policyScreen', 'profileScreen', 'findScreen'].forEach(function(id) {
+        const el = $(id); if (el) el.classList.add('hidden');
+    });
+    const target = $(name + 'Screen'); if (target) target.classList.remove('hidden');
+
+    // Hide back button on auth/code/home
+    if (name === 'home' || name === 'auth' || name === 'code') showBackButton(false);
+    else showBackButton(true);
+
+    if (name === 'safety' || name === 'armed') startGPS();
+    if (name === 'armed') updateArmedLocation();
+    if (name === 'home') refreshLockIcons();
+    if (name === 'profile' && currentUser) {
+        const pCode = $("profileCode"); if (pCode) pCode.textContent = currentUserCode || "DH-______";
+    }
+
+    setTimeout(() => {
+        if (mapSafety) mapSafety.invalidateSize();
+        if (mapArmed)  mapArmed.invalidateSize();
+        if (mapGroup)  mapGroup.invalidateSize();
+        if (mapFind)   mapFind.invalidateSize();
+    }, 200);
+
+    checkBanner();
+}
+
+// ============================================
+// TIME
+// ============================================
+function getSafetyMs() {
+    const number = parseFloat($("s_num").value);
+    if (isNaN(number) || number <= 0) { alert("Duration must be at least 1 minute."); return null; }
+    const unit = $("s_unit").value;
+    const minutes = unit === "minutes" ? number : number * 60;
+    if (minutes < 1) { alert("Minimum is 1 minute."); return null; }
+    if (minutes > 24 * 60) { alert("Maximum is 24 hours."); return null; }
+    return minutes * 60 * 1000;
+}
+
+// ============================================
+// ARM SAFETY
+// ============================================
+async function arm(type) {
+    if (type !== "safety") return;
+    const ms = getSafetyMs(); if (!ms) return;
+
+    const p1 = ($("s_p1code").value || "").trim().toUpperCase();
+    const p2 = ($("s_p2code").value || "").trim().toUpperCase();
+
+    if (!p1 && !p2) { alert("Enter at least one partner code."); return; }
+
+    const resolved = await resolvePartnerCodes([p1, p2].filter(Boolean));
+    if (resolved.error) { alert(resolved.error); return; }
+
+    const data = {
+        type: "safety",
+        where: $("s_where").value.trim(),
+        partners: resolved.partners,
+        durationMs: ms,
+        startedAt: Date.now(),
+        expiresAt: Date.now() + ms
+    };
+
+    deadline = Date.now() + ms;
+    triggered = false;
+    localStorage.setItem("dh_deadline", deadline.toString());
+    localStorage.setItem("dh_data", JSON.stringify(data));
+    localStorage.setItem("dh_armed", "1");
+    localStorage.removeItem("dh_triggered");
+
+    const ms1 = $("modeShow"); if (ms1) ms1.innerText = "SAFETY";
+    const ws = $("whereShow"); if (ws) ws.innerText = data.where || "";
+
+    // Save to Firebase so server can act
+    if (currentUser) {
+        database.ref("users/" + currentUser.uid + "/safetyMode").set({
+            enabled: true,
+            timer: {
+                durationMs: ms,
+                startedAt: data.startedAt,
+                expiresAt: data.expiresAt,
+                active: true,
+                triggered: false,
+                triggeredAt: 0
+            },
+            where: data.where,
+            partners: resolved.partners.reduce((acc, p) => { acc[p.code] = { uid: p.uid, name: p.name }; return acc; }, {}),
+            status: "armed"
+        }).catch(() => {});
+    }
+
+    openScreen("armed");
+    startTimer();
+    startGPS();
+    if (navigator.vibrate) navigator.vibrate(300);
+}
+
+// ============================================
+// GPS
+// ============================================
+function startGPS() {
+    if (!navigator.geolocation) { showGPSError("GPS not supported."); return; }
+    showGPSLoading();
+    navigator.geolocation.getCurrentPosition(
+        (pos) => updateGPS(pos),
+        (err) => {
+            startGPSWatch();
+            let msg = "GPS: " + err.message;
+            if (err.code === 1) msg = "Location permission denied.";
+            else if (err.code === 2) msg = "GPS signal lost.";
+            else if (err.code === 3) msg = "GPS timeout.";
+            showGPSError(msg);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+    );
+    startGPSWatch();
+}
+function startGPSWatch() {
+    if (gpsWatch !== null) { navigator.geolocation.clearWatch(gpsWatch); gpsWatch = null; }
+    gpsWatch = navigator.geolocation.watchPosition(
+        (pos) => updateGPS(pos),
+        (err) => console.warn("GPS Watch err:", err.message),
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 30000 }
+    );
+}
+function updateGPS(pos) {
+    const lat = pos.coords.latitude, lon = pos.coords.longitude, accuracy = pos.coords.accuracy || 0;
+    lastLatitude = lat; lastLongitude = lon; lastAccuracy = accuracy;
+    saveMyLocationToFirebase();
+
+    const mapURL = "https://maps.google.com/?q=" + lat + "," + lon;
+    const html = `<div class="location-good">📍 Location found<br>${lat.toFixed(6)}, ${lon.toFixed(6)}<br>Accuracy: ${Math.round(accuracy)}m<br><a class="mapLink" href="${mapURL}" target="_blank">🗺️ OPEN IN GOOGLE MAPS</a></div>`;
+
+    const sLoc = $("s_loc"); if (sLoc) sLoc.innerHTML = html;
+    const locShow = $("locShow"); if (locShow) locShow.innerHTML = html;
+
+    if (sLoc && !$("safetyScreen").classList.contains("hidden")) updateSafetyMap(lat, lon);
+    if (locShow && !$("armedScreen").classList.contains("hidden")) updateArmedMap(lat, lon);
+}
+function showGPSLoading() {
+    const html = `<div class="location-loading">📍 Getting GPS location...<br><span style="font-size:10px">Please allow location permission.</span></div>`;
+    const sLoc = $("s_loc"); if (sLoc) sLoc.innerHTML = html;
+    const locShow = $("locShow"); if (locShow) locShow.innerHTML = html;
+}
+function showGPSError(message) {
+    const html = `<div class="location-error">❌ ${message}<br><br><span style="font-size:10px">Make sure Location/GPS is ON and permission is allowed.</span></div>`;
+    const sLoc = $("s_loc"); if (sLoc) sLoc.innerHTML = html;
+    const locShow = $("locShow"); if (locShow) locShow.innerHTML = html;
+}
+function requestGPS() { showGPSLoading(); startGPS(); }
+function updateArmedLocation() {
+    const lat = localStorage.getItem("dh_lat"), lon = localStorage.getItem("dh_lon");
+    if (!lat || !lon) { startGPS(); return; }
+    updateArmedMap(parseFloat(lat), parseFloat(lon));
+}
+
+// ============================================
+// TIMER
+// ============================================
+function startTimer() {
+    if (interval) clearInterval(interval);
+    updateTimer();
+    interval = setInterval(updateTimer, 1000);
+}
+function updateTimer() {
+    if (!deadline) return;
+    const left = deadline - Date.now();
+    if (left <= 0) {
+        const t = $("timer"); if (t) t.innerText = "00:00:00";
+        if (localStorage.getItem("dh_triggered") !== "1") trigger();
+        return;
+    }
+    const d = Math.floor(left / 86400000), h = Math.floor((left % 86400000) / 3600000),
+          m = Math.floor((left % 3600000) / 60000), s = Math.floor((left % 60000) / 1000);
+    const text = d > 0
+        ? d + "d " + String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0")
+        : String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+    const t = $("timer"); if (t) t.innerText = text;
+    const mt = $("miniTimer"); if (mt) mt.innerText = text;
+}
+
+// ============================================
+// CHECK-IN / DISARM / TRIGGER
+// ============================================
+function checkIn() {
+    const data = JSON.parse(localStorage.getItem("dh_data") || "{}");
+    const ms = data.durationMs || 60 * 60 * 1000;
+    deadline = Date.now() + ms;
+    localStorage.setItem("dh_deadline", deadline.toString());
+    localStorage.removeItem("dh_triggered");
+    triggered = false;
+    if (currentUser) {
+        database.ref("users/" + currentUser.uid + "/safetyMode/timer").update({
+            expiresAt: deadline, triggered: false, triggeredAt: 0
+        }).catch(() => {});
+    }
+    updateTimer();
+    if (navigator.vibrate) navigator.vibrate(200);
+    alert("✅ Check-in successful. Timer reset.");
+}
+function disarm() {
+    if (!confirm("Disarm DEAD HAND?")) return;
+    if (interval) clearInterval(interval);
+    if (gpsWatch !== null && navigator.geolocation) navigator.geolocation.clearWatch(gpsWatch);
+    ["dh_armed","dh_deadline","dh_data","dh_triggered","dh_lat","dh_lon","dh_accuracy","dh_contacts"].forEach((k) => localStorage.removeItem(k));
+    if (currentUser) {
+        database.ref("users/" + currentUser.uid + "/safetyMode").update({ status: "disarmed", enabled: false }).catch(() => {});
+    }
+    location.reload();
+}
+async function trigger() {
+    if (localStorage.getItem("dh_triggered") === "1") return;
+    localStorage.setItem("dh_triggered", "1");
+    triggered = true;
+    if (interval) clearInterval(interval);
+
+    const data = JSON.parse(localStorage.getItem("dh_data") || "{}");
+    const partners = data.partners || [];
+    const lat = lastLatitude != null ? lastLatitude : localStorage.getItem("dh_lat");
+    const lon = lastLongitude != null ? lastLongitude : localStorage.getItem("dh_lon");
+    const acc = lastAccuracy || 0;
+    const locationText = (lat && lon) ? "https://maps.google.com/?q=" + lat + "," + lon : "Location unavailable";
+
+    const message = "🚨 DEAD HAND SAFETY ALERT 🚨\n\nI did not come back" +
+        (data.where ? " from " + data.where : "") +
+        ".\n\nLast known location:\n" + locationText +
+        "\nTime: " + new Date().toLocaleString();
+
+    // Write FCM alert inbox for each partner
+    await sendFcmAlertToPartners(partners, {
+        mode: "safety",
+        message,
+        lat: lat ? parseFloat(lat) : null,
+        lon: lon ? parseFloat(lon) : null,
+        acc,
+        mapLink: locationText
+    });
+
+    // Also save last event to Firebase
+    if (currentUser) {
+        database.ref("users/" + currentUser.uid + "/safetyMode").update({
+            status: "triggered",
+            "timer/active": false,
+            "timer/triggered": true,
+            "timer/triggeredAt": Date.now()
+        }).catch(() => {});
+    }
+
+    alert("🚨 DEAD HAND FIRED!\n\nYour partners have been notified with your last known location.\n\n" + locationText);
+}
+
+// ============================================
+// BANNER
+// ============================================
+function checkBanner() {
+    const armed = localStorage.getItem("dh_armed");
+    if (armed === "1") {
+        const data = JSON.parse(localStorage.getItem("dh_data") || "{}");
+        const savedDeadline = localStorage.getItem("dh_deadline");
+        if (savedDeadline) deadline = parseInt(savedDeadline, 10);
+        const banner = $("activeBanner"); if (banner) banner.classList.remove("hidden");
+        const at = $("activeText");
+        if (at) at.innerText = (data.type || "SYSTEM").toUpperCase() + " ARMED" + (data.where ? " • " + data.where : "");
+        updateTimer();
+    } else {
+        const banner = $("activeBanner"); if (banner) banner.classList.add("hidden");
+    }
+}
+function resumeArmed() {
+    const data = JSON.parse(localStorage.getItem("dh_data") || "{}");
+    const savedDeadline = localStorage.getItem("dh_deadline");
+    if (!savedDeadline) { disarm(); return; }
+    deadline = parseInt(savedDeadline, 10);
+    const ms = $("modeShow"); if (ms) ms.innerText = (data.type || "").toUpperCase();
+    const ws = $("whereShow"); if (ws) ws.innerText = data.where || "";
+    openScreen("armed");
+    startTimer();
+    startGPS();
+}
+
+// ============================================
+// HELPERS
+// ============================================
+function escapeHtml(v) {
+    return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+
+// ============================================
+// SERVICE WORKER
+// ============================================
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch((e) => console.warn("SW reg fail", e));
+}
+
+// ============================================
+// PAGE LOAD
+// ============================================
+window.addEventListener("load", function() {
+    attachLongPress($("btnSafety"), () => handleModeTap("safety"), openDeveloperScreen, 2000);
+    refreshLockIcons();
+});
+
+</script>
+
+</body>
+</html>
